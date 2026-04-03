@@ -23,10 +23,8 @@ object WeatherService {
         for {
           pointsUri <- Concurrent[F].fromEither(Uri.fromString(s"$NwsBase/points/$lat,$lon"))
           points <- client.expect[NwsPointsResponse](Request[F](uri = pointsUri).putHeaders(UserAgent))
-          _ <- Concurrent[F].pure(println(points))
           forecastUri <- Concurrent[F].fromEither(Uri.fromString(points.properties.forecast))
           fc <- client.expect[NwsForecastResponse](Request[F](uri = forecastUri).putHeaders(UserAgent))
-          _ <- Concurrent[F].pure(println(fc))
           today <- Concurrent[F].fromOption(
             fc.properties.periods.find(_.isDaytime),
             new RuntimeException("No daytime forecast period found")

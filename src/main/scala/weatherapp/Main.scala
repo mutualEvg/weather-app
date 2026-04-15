@@ -8,22 +8,44 @@ import org.http4s.server.middleware.Logger
 
 object Main extends IOApp.Simple {
 
-  override def run: IO[Unit] =
+  override def run: IO[Unit] = {
+    val cfg = AppConfig.load
+
     EmberClientBuilder
       .default[IO]
+      .withTimeout(cfg.clientTimeout)
       .build
       .use { client =>
-        val weatherService = WeatherService.impl[IO](client)
-        val httpApp        = Logger.httpApp(logHeaders = true, logBody = false)(
-          WeatherRoutes.routes[IO](weatherService).orNotFound
-        )
+        for {
+          cache <- WeatherCache.inMemory[IO](cfg.cacheTtl)
 
-        EmberServerBuilder
-          .default[IO]
-          .withHost(host"0.0.0.0")
-          .withPort(port"8080")
-          .withHttpApp(httpApp)
-          .build
-          .useForever
+          service = WeatherService.withCache[IO](
+            WeatherService.withRetry[IO](
+              WeatherService.impl[IO](client),
+              cfg.nwsClient.maxRetries
+            ),
+            cache
+          )
+
+          host <- IO.fromOption(Host.fromString(cfg.server.host))(
+            new RuntimeException(s"Invalid host: ${cfg.server.host}")
+          )
+          port <- IO.fromOption(Port.fromInt(cfg.server.port))(
+            new RuntimeException(s"Invalid port: ${cfg.server.port}")
+          )
+
+          httpApp = Logger.httpApp(logHeaders = true, logBody = false)(
+            WeatherRoutes.routes[IO](service).orNotFound
+          )
+
+          _ <- EmberServerBuilder
+            .default[IO]
+            .withHost(host)
+            .withPort(port)
+            .withHttpApp(httpApp)
+            .build
+            .useForever
+        } yield ()
       }
+  }
 }

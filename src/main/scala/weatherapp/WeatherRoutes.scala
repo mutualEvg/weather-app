@@ -6,6 +6,7 @@ import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
 import org.http4s.dsl.impl.QueryParamDecoderMatcher
 import org.http4s.circe.CirceEntityEncoder._
+import io.circe.literal._
 
 object WeatherRoutes {
 
@@ -22,7 +23,7 @@ object WeatherRoutes {
           .forecast(lat, lon)
           .flatMap(Ok(_))
           .handleErrorWith { err =>
-            BadRequest(io.circe.Json.obj("error" -> io.circe.Json.fromString(err.getMessage)))
+            BadRequest(json"""{"error": ${err.getMessage}}""")
           }
     }
   }
